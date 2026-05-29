@@ -44,9 +44,9 @@
 </head>
 <body>
   <!-- Elemento de Vídeo para Visualização em Tempo Real -->
-  <video id="input_video" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; pointer-events: none;"></video>
+  <video id="input_video" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; pointer-events: none;" autoplay playsinline muted></video>
 
-  <!-- Scripts do MediaPipe para Processamento Neural (Holistic para Mãos + Corpo) -->
+  <!-- Scripts do MediaPipe Otimizados -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
@@ -56,56 +56,55 @@
     let poseCallback;
     const videoElement = document.getElementById('input_video');
 
-    // Inicializa o Detector Holístico
+    // Inicializa o Detector com cache de modelo
     window.initPoseDetector = async function() {
+      if (holistic) return true;
       try {
         holistic = new Holistic({locateFile: (file) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
         }});
 
         holistic.setOptions({
-          modelComplexity: 1,
+          modelComplexity: 0, // 0 = Mais rápido (Lite), 1 = Médio
           smoothLandmarks: true,
-          enableSegmentation: false,
-          smoothSegmentation: false,
-          refineFaceLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
         });
 
         holistic.onResults((results) => {
-          // Combinamos Pose + Mãos para o Flutter
+          if (!poseCallback) return;
           const data = {
             pose: results.poseLandmarks || [],
             leftHand: results.leftHandLandmarks || [],
             rightHand: results.rightHandLandmarks || []
           };
-          if (poseCallback) {
-            poseCallback(JSON.stringify(data));
-          }
+          poseCallback(JSON.stringify(data));
         });
 
+        // Pré-aquecimento do modelo
+        await holistic.initialize();
         return true;
       } catch (e) {
-        console.error("Erro Holistic:", e);
+        console.error("Erro IA:", e);
         return false;
       }
     };
 
     window.startCamera = async function(facingMode) {
-      if (camera) await camera.stop();
-
-      videoElement.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
-
       try {
+        if (camera) await camera.stop();
+
+        videoElement.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+
         camera = new Camera(videoElement, {
           onFrame: async () => {
-            await holistic.send({image: videoElement});
+            if (holistic) await holistic.send({image: videoElement});
           },
           facingMode: facingMode,
-          width: 1280,
-          height: 720
+          width: 640, // Resolução menor para reduzir latência
+          height: 480
         });
+
         await camera.start();
         return true;
       } catch (e) {
@@ -115,7 +114,6 @@
 
     window.stopCamera = function() {
       if (camera) camera.stop();
-      videoElement.srcObject = null;
     };
 
     window.setPoseCallback = function(callback) {
