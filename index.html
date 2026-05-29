@@ -46,6 +46,9 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Elemento de Vídeo para Visualização em Tempo Real -->
+  <video id="input_video" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1;"></video>
+
   <!-- Scripts do MediaPipe para Processamento Neural -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -54,6 +57,7 @@
     let pose;
     let camera;
     let poseCallback;
+    const videoElement = document.getElementById('input_video');
 
     // Inicializa o Detector de Pose
     window.initPoseDetector = async function() {
@@ -86,9 +90,16 @@
 
     // Inicia a Câmera
     window.startCamera = async function(facingMode) {
-      const videoElement = document.createElement('video');
-      videoElement.style.display = 'none';
-      document.body.appendChild(videoElement);
+      if (camera) {
+        await camera.stop();
+      }
+
+      // Aplica espelhamento apenas se for a câmera frontal (user)
+      if (facingMode === 'user') {
+        videoElement.style.transform = 'scaleX(-1)';
+      } else {
+        videoElement.style.transform = 'scaleX(1)';
+      }
 
       try {
         camera = new Camera(videoElement, {
@@ -108,7 +119,10 @@
     };
 
     window.stopCamera = function() {
-      if (camera) camera.stop();
+      if (camera) {
+        camera.stop();
+      }
+      videoElement.srcObject = null;
     };
 
     window.setPoseCallback = function(callback) {
@@ -116,7 +130,6 @@
     };
 
     window.captureFrame = function() {
-      // Implementação simplificada para captura
       return "";
     };
   </script>
