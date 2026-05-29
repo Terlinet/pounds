@@ -46,14 +46,81 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <!-- Scripts do MediaPipe para Processamento Neural -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    let pose;
+    let camera;
+    let poseCallback;
+
+    // Inicializa o Detector de Pose
+    window.initPoseDetector = async function() {
+      try {
+        pose = new Pose({locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }});
+
+        pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          smoothSegmentation: false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        pose.onResults((results) => {
+          if (results.poseLandmarks && poseCallback) {
+            poseCallback(JSON.stringify(results.poseLandmarks));
+          }
+        });
+
+        return true;
+      } catch (e) {
+        console.error("Erro ao inicializar Pose:", e);
+        return false;
+      }
+    };
+
+    // Inicia a Câmera
+    window.startCamera = async function(facingMode) {
+      const videoElement = document.createElement('video');
+      videoElement.style.display = 'none';
+      document.body.appendChild(videoElement);
+
+      try {
+        camera = new Camera(videoElement, {
+          onFrame: async () => {
+            await pose.send({image: videoElement});
+          },
+          facingMode: facingMode,
+          width: 1280,
+          height: 720
+        });
+        await camera.start();
+        return true;
+      } catch (e) {
+        console.error("Erro Câmera:", e);
+        return false;
+      }
+    };
+
+    window.stopCamera = function() {
+      if (camera) camera.stop();
+    };
+
+    window.setPoseCallback = function(callback) {
+      poseCallback = callback;
+    };
+
+    window.captureFrame = function() {
+      // Implementação simplificada para captura
+      return "";
+    };
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
