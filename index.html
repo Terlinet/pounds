@@ -1,24 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/pounds/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="TerlineT Pounds - Tradutor de Libras com Inteligência Artificial">
+
+  <style>
+    html, body {
+      background-color: transparent !important;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
 
   <!-- Open Graph / Facebook / WhatsApp -->
   <meta property="og:type" content="website">
@@ -47,64 +44,63 @@
 </head>
 <body>
   <!-- Elemento de Vídeo para Visualização em Tempo Real -->
-  <video id="input_video" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1;"></video>
+  <video id="input_video" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; pointer-events: none;"></video>
 
-  <!-- Scripts do MediaPipe para Processamento Neural -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <!-- Scripts do MediaPipe para Processamento Neural (Holistic para Mãos + Corpo) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
   <script>
-    let pose;
+    let holistic;
     let camera;
     let poseCallback;
     const videoElement = document.getElementById('input_video');
 
-    // Inicializa o Detector de Pose
+    // Inicializa o Detector Holístico
     window.initPoseDetector = async function() {
       try {
-        pose = new Pose({locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        holistic = new Holistic({locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
         }});
 
-        pose.setOptions({
+        holistic.setOptions({
           modelComplexity: 1,
           smoothLandmarks: true,
           enableSegmentation: false,
           smoothSegmentation: false,
+          refineFaceLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
         });
 
-        pose.onResults((results) => {
-          if (results.poseLandmarks && poseCallback) {
-            poseCallback(JSON.stringify(results.poseLandmarks));
+        holistic.onResults((results) => {
+          // Combinamos Pose + Mãos para o Flutter
+          const data = {
+            pose: results.poseLandmarks || [],
+            leftHand: results.leftHandLandmarks || [],
+            rightHand: results.rightHandLandmarks || []
+          };
+          if (poseCallback) {
+            poseCallback(JSON.stringify(data));
           }
         });
 
         return true;
       } catch (e) {
-        console.error("Erro ao inicializar Pose:", e);
+        console.error("Erro Holistic:", e);
         return false;
       }
     };
 
-    // Inicia a Câmera
     window.startCamera = async function(facingMode) {
-      if (camera) {
-        await camera.stop();
-      }
+      if (camera) await camera.stop();
 
-      // Aplica espelhamento apenas se for a câmera frontal (user)
-      if (facingMode === 'user') {
-        videoElement.style.transform = 'scaleX(-1)';
-      } else {
-        videoElement.style.transform = 'scaleX(1)';
-      }
+      videoElement.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
 
       try {
         camera = new Camera(videoElement, {
           onFrame: async () => {
-            await pose.send({image: videoElement});
+            await holistic.send({image: videoElement});
           },
           facingMode: facingMode,
           width: 1280,
@@ -113,15 +109,12 @@
         await camera.start();
         return true;
       } catch (e) {
-        console.error("Erro Câmera:", e);
         return false;
       }
     };
 
     window.stopCamera = function() {
-      if (camera) {
-        camera.stop();
-      }
+      if (camera) camera.stop();
       videoElement.srcObject = null;
     };
 
@@ -129,9 +122,7 @@
       poseCallback = callback;
     };
 
-    window.captureFrame = function() {
-      return "";
-    };
+    window.captureFrame = function() { return ""; };
   </script>
 
   <script src="flutter_bootstrap.js" async></script>
